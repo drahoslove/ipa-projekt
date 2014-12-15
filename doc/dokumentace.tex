@@ -1,0 +1,215 @@
+%	Dokumentace k projektu IPA 2014
+
+%	xbedna55 Drahoslav Bednář 
+
+
+\documentclass[11pt,a4paper,titlepage]{article}
+\usepackage[left=2cm,text={17cm, 24cm},top=3cm]{geometry}
+\usepackage[czech]{babel}
+\usepackage[IL2]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[ruled,vlined,czech,linesnumbered,longend,noline]{algorithm2e}
+\usepackage[nomessages]{fp}
+\usepackage{datetime}
+\usepackage{multirow}
+\usepackage{times}
+\usepackage[hidelinks]{hyperref}
+\usepackage{setspace} 
+\usepackage{epstopdf}
+\usepackage{picture}
+\usepackage{graphicx}
+
+
+\newcommand{\easyhref}[1]{{\href{#1}{#1}}}
+\newcommand*\rfrac[2]{{}^{#1}\!/_{#2}} %cool zlomečky
+
+\begin{document}
+\catcode`\-=12
+
+\begin{titlepage}
+\begin{center}
+\Huge
+\textsc{Vysoké učení technické v~Brně\\
+\huge Fakulta informačních technologií}\\ 
+\vspace{\stretch{0.2}}
+\includegraphics[width=10em]{fit-logo}\\
+\vspace{\stretch{0.2}}
+\huge Dokumentace k projektu do předmětu IPA\\
+\Huge Jednoduchá aplikace v assembleru\\
+\vspace{\stretch{0.2}}
+\Large Celulární automat
+\end{center}
+
+\vspace{\stretch{0.2}}
+\vspace{\stretch{0.2}}
+
+{\bf \large Drahoslav Bednář} {\large xbedna55} {\large \hfill \today}
+\vspace{\stretch{0.2}}
+
+%nastavíme čítače
+\thispagestyle{empty}
+\setcounter{page}{0}
+\end{titlepage}
+
+\newpage
+\thispagestyle{empty}
+\setcounter{page}{0}
+%vygenerujeme obsah
+\tableofcontents
+
+\newpage
+\section{Úvod}
+Tato dokumentace popisuje návrh, implementaci a používání programu {\bf CA} - Celulární Automat, který vznikl jako výsledek mého snažení při řešení projektu do předmětu Pokročilé Assemblery.
+
+\newpage
+\section{Specifikace}
+\subsection{Výběr zadání}
+Zadání znělo {\it  vytvořit jednoduchou aplikaci v assembleru} což mi dalo velikou volnost. Rozhodl jsem se tedy vytvořit program inspirovaný mou vlastní webovou aplikací vytvořenou v JavaScriptu\footnote{http://apps.yo2.cz/GameOfLife/}. Jednoduchý dvourozměrný celulární automat, založený na známém {\bf Game of Life} (Hra života) Johna Hortona Conwaye.
+
+
+
+\subsection{Game of Life}
+
+Pro nezasvěcené. Celulární automat je souhrné označení pro určitý model reálné situace reprezentovaný přístrojem či počítačovým algoritmem.
+
+Game of Life je takový celulární automat, který je reprezentován jako dvourozměrná matice polí - buněk. Každá {\bf buňka} se nachází právě v jednom ze dvou možných stavů. {\bf Živá}, ta je obvykle znázorňována černou barvou, a {\bf mrtvá} s bílou barvou - já však ve svém řešení použil pozitivnější modrou barvu.
+
+Stav každé buňky se může měnit v čase v závisloti na jejím Moorově okolí - sousedních osmi buňkách. A to podle následujících {\bf 4 pravidel}:
+\begin{itemize}
+  \item Pokud je buňka živá a má dvě, nebo tři živé sousední buňky, potom bude v další generaci stále živá 
+  \item Pokud je buňka živá a má méňě než dva sousedy, potom v další generaci zemře 
+  \item Pokud je buňka živá a má více než tři živé sousedy, potom v další generaci zemře 
+  \item Pokud je buňka mrtvá a má právě tři živé sousedy, potom buňka znovu oživne
+\end{itemize}
+Tato pravidla lze ještě jednodušeji zapsat jako {\bf 23/3} pomocí S/B notace, kde S je výčet možných počtů sousedních živých buňěk potřebných k přežití a B je pak značí počet živých buňěk potřebný pro ožití mrvé buňky.
+
+
+\subsection{Můj program}
+Protože různých implementací klasického Conway's Game of Life je nespočet, rozhodl jsem se odlišit.
+Můj program je univerzálnější, obsahuje nejen Hru Života, ale i několik dalších zajímavých celulárních automatů stejného typu (odvozených od Game of Life). Jmenovitě to jsou:
+\begin{description}
+  \item[23/3] Game of Life
+  \item[34/34] 34 life - podobný jako game of life
+  \item[/2] Seeds - rychle se rozpínající
+  \item[1358/357] Amoeba - roste chaoticky jako améba
+  \item[235678/378] Coagulations - postupuje ve dvou vlnách
+  \item[12345/3] Maze - tvoří pěkná bludiště
+  \item[012345678/3] Flakes - roste jako namrzající vločky
+  \item[45678/3] Coral - podobné flakes, roste velmi pomamalu
+  \item[2345/45678] WalledCities - tvoří obrazené oblasti s aktivitou uvnitř
+  \item[1357/1357] Replicator - každých 8 iterací se replikuje
+  \item[5/345] Long life - tvoří dlouhožijící struktury
+\end{description}
+
+\newpage
+\section{Implementace}
+\subsection{Použité technologie}
+Program je psaný pro assemblerovský překladač {\bf nasm}, pro slinkování byl využit linker {\bf alink}.
+K při debugování mi byl nápomocný nástroj {\bf ollyDbg}.
+Můj program je je určen pro operační systém {\bf windows} a využívá knihovní funkce tohoto systému pro práci s okny. Pro vykreslování buněk jsou využity funkce z grafické knihovny {\bf openGL}.
+
+Dovolil jsem si proto ve svém řešení využít poskytnuté soubory {\bf win32.inc} a {\bf opengl.inc} pro práci se zmíněnými knihovnami a dále pomocný soubor {\bf general.inc} do kterého jsem ještě doplnil vlastní makro wstring pro zjednodušení práce s 16 bitovými wide řetězci. Aplikace je tedy schopná korektně zobrazovat i znaky s diakritikou.
+
+Samotný program je implementován v souboru {\bf ca.asm}.
+
+
+\subsection{Vlastní implementace}
+Program využívám klasickou smyčku zpráv a reaguje na události stisknutí kláves nebo tlačítka myši a zobrazuje grafiku na obrazovce s využitím openGL funkcí pro vykreslování buňěk jakožto dvourozměrných polygonů.
+
+Pro své interní funkce využívám všude konvenci stdcall, návratovou hodnotu vracím v eax reistru a ostatní registry neměním, v některých případech jsou ale některé registry měněny voláním knihovních funkcí.
+
+Nepoužívám žádné MMX ani SSE instrukce takže by můj program měl být široce přenositelný (v rámci platformy windows). Při řešení jednotlivých problémů jsem se snažil najít vždy nejjednodušší řešení a soustřdil se spíš na přehlednost než rychlost. Velký potenciál výkonostních optimalizací při psaní programů v assembleru jsem tedy příliš nevyužil a pravděpodobně by stejný program napsaný v jazyce C byl rychlejší.
+
+Buňky mám reprezentovány jako matici - pole, interně nazvanou map (ta je vytvořena dynamicky použitím fuknce malloc po startu programu), kde každý bajt představuje jednu buňku. Mapy jsou dvě, jedna aktivní pro vykreslování a druhá pracovní pro učely generování nové generace.
+
+Krom buněk jsou pro všechny ostatní číselné hodnoty použity 32b položky.
+
+Pro aplikování pravidel celulárního automatu při vývoji (myšleno evoluce) buněk jsem použil ten nejhloupější algoritmus, který vypadá následovně:
+projdu všechny řádky v aktivní mapě buněk
+v každém řádků projdu každou buňku
+pro každou buňku spočítám kolik má živých sousedních buňěk
+porovnám s aktuálně aplikovaným pravidlem
+nastavím v pracovní mapě na dané pozici buňku na živou či neživou
+nakonec prohodím pracovní mapu za aktivní
+výsledekk zobrazím zavoláním fukce na vykreslení černého čtverečku pro každou živou buňku 
+
+Kromě samotné mapy buněk nemá program žádné uživatelské rozhraní v podobě tlačítek a podobně, vše se ovládá klávesnicí. Je možné si zobrazit okénko s nápovědou - výčtem akčních kláves a okénko se statistikami, které zobrazuje počet živých buňěk, číslo generace, akturálně vybrané pravidlo a další.
+
+
+
+
+
+
+
+
+\newpage
+\section{Použití programu}
+Program funguje jako klasická spustitelná okenní aplikace pro operační systém windows.
+Program je možné spustit s volitelnýmy parametry
+\begin{description}
+\item[-p] Vynutí automatické spuštění vývoje ihned po startu programu
+\item[-h] Vynutí automatické zobrazení okna s nápovědou ihned po startu programu
+\item[-s] Vynutí automatické zobrazení okna se statistikami ihned po startu programu
+\item[-d] XY Slouží k nastavení rozměru mapy (nikoliv velikost okna v pixelech) kde X a Y jsou číslice 0-9 a 
+výsledný počet buňěk na šířku je pak spočítán jako $2^{(2+Y)}$ a počet buňěk na výšku pak analogicky jako $2^{(2+Y)}$
+\end{description}
+Přepínače lze libovolně kombinovat.
+\medskip
+\medskip
+Program se ovládá především klávesnicí s ohledem na to, aby nejužívanější akce šlo provádět jednou (pravou) rukou.\\
+Výčet funkčních kláves:
+
+\begin{description}
+\item[F1] zobrazí nebo přenese do popředí pomocné okno nápovědy
+\item[F2] zobrazí nebo přenese do popředí pomocné okno se statistikami
+\item[esc] skryje pomocné okno, pokud je aktivní
+\medskip
+\item[mezerník] přepíná stav play/pause - tedy zapnutí a vypnutí periodického vývoje buňěk
+\item[J] slouží pro ruční krokování - skok na další generaci buňěk
+\item[K] slouží pro skok o jednu generaci zpět, respektive přepínání dvou posledních generací
+\item[O] zvýší rychlost periodického vývoje buňěk
+\item[L] sníží rychlost periodického vývoje buňěk
+\item[U] cyklicky přepíná mezi předdefinovanými pravidly
+\item[I] cyklicky přepíná mezi předdefinovanými pravidly v opačném směru
+\medskip
+\item[C] vyčistí obrazovku - změní stav všečh buňěk na mrtvá
+\item[R] nastaví stav všech buňěk do stavu ve kterém byly po spuštění programu
+\item[Q] vypne celý program 
+\end{description}
+
+\newpage
+\section{Shrnutí}
+Nakonec Podařilo se mi podařilo vytvořit program, který téměř odpovídá mým počátečním představám.
+
+Při psaní programu jsem se potýkal spíše jen s drobnýmy problémy plynoucí z obecně obtížného ladění programů psaných v assembleru.
+A dále jsem řešil problémy související z mých nevelkých znalostí problematiky fungování systému windows a tvorby jeho aplikací. Díky tomuto projektu jsem si však své vědomosti z této oblasti značně rozšířil.
+
+
+\section{Závěr}
+S tvorbou jakékoliv spustitelné grafické aplikace jsem se nikdy předtím nesetkal, natož psané v assembleru, takže byl pro mě projekt velkou výzvou a obával jsem se výsledku. S konečným programem jsem ale nakonec poměrně spokojen. Ikdyž jsem si vědomý některých nedostatků. Kdybych měl více času, rozhodně bych doimplementoval ještě další funkcionality, například možnost načís bitmapu, ze vstupního souboru, jako reprezentaci počátečného rozložení buňěk. A nebo možnost nastavit zvolist si krom těch těch pár přednastavených i libovolné vlastní pravidlo.
+
+Práce na projektu mě překvapivě bavila. A ikdyž výsledný program dohromady nemá moc význam pro použítí, myslím si, že zadání splňuje dostatečně.\\
+
+
+Vysázeno v \LaTeX u.
+
+\newpage
+\section{Metriky kódu}
+\begin{itemize}
+  \item Počet zdrojových souborů: 1
+  \item Počet řádků kódu: 1878
+  \item Velikost spustitelného souboru: 792 B
+\end{itemize}
+
+
+%\newpage
+\appendix
+\section{Přílohy}
+\begin{figure}[ht!]
+\centering
+
+\end{figure}
+
+
+
+\end{document}

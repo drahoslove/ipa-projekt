@@ -91,13 +91,6 @@ dllimport swprintf, msvcrt.dll, swprintf_s
 ; uloží na zásobník 64b z paměti
 %macro push64 1 
 	sub esp,8                
-	;movq xmm0,[%1]
-	;movq [esp],xmm0
-
-	;mov eax,[%1]					
-	;mov [esp],eax
-	;mov eax,[%1 + 4]
-	;mov [esp + 4],eax
 
 	fld qword [%1]
 	fstp qword [esp]
@@ -300,16 +293,12 @@ stringw swzStatForm,\
 	""
 
 
-
-;numero:
-;times 11 dw 0 ; místo pro převádění 32b čísla na string
-
 ; struktury
 
 Message:	resb MSG_size
 
 HelpPS:		resb PAINTSTRUCT_size	; pro vykreslení textu nápovědy
-StatPS:		resb PAINTSTRUCT_size	; pro vykreslení textu nápovědy
+StatPS:		resb PAINTSTRUCT_size	; pro vykreslení textu statistik
 
 HelpRect:	; definice velikosti rámce pro text nápovědy
 	istruc RECT
@@ -319,7 +308,7 @@ HelpRect:	; definice velikosti rámce pro text nápovědy
 		at RECT.bottom,	dd Help_H-5
 	iend
 
-StatRect:	; definice velikosti rámce pro text nápovědy
+StatRect:	; definice velikosti rámce pro text statistik
 	istruc RECT
 		at RECT.left,	dd 6
 		at RECT.top,	dd 5
@@ -1154,13 +1143,18 @@ function SetCell,sx,sy
 begin
 	
 	;eax = map + y*map_w + x
+
 	mov eax, [map_w]
 	mul dword [sy]
 	add eax, [sx]
 	add eax, [map]
 
+	cmp [eax], byte 1 ; pokud už je nastaveno nic nedělat
+	je .skip
 	mov [eax], byte 1;
 	add [population], dword 1 
+
+	.skip:
 
 	return
 end
@@ -1882,5 +1876,12 @@ begin
 	mov [mouse_x], eax
 	mov eax, [y_c]
 	mov [mouse_y], eax
+
+	; spočítat souřadnice buňky
+
+	
+
+	;call SetCell,[],[]
+
 return
 end
