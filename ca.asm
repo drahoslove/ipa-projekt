@@ -172,6 +172,10 @@ w_right:	dq d(1.0)
 w_top:		dq d(1.0)
 w_bottom:	dq d(-1.0)
 
+; odsazení klikatelné oblasti
+crop_top:	dd 0; 
+crop_left:	dd 0;
+
 
 ; aktuálně vybraná pravidla 
 rule:
@@ -289,8 +293,8 @@ stringw swzStatForm,\
 	"map height:",TAB,"%u",EOL,\
 	"x:",TAB,"%04u",EOL,\
 	"y:",TAB,"%04u",EOL,\
-	"test:",TAB,"%08X",EOL,\
 	""
+	;"test:",TAB,"%08X",EOL,\
 
 
 ; struktury
@@ -659,13 +663,15 @@ begin
 	cmp eax,WM_KEYDOWN
 	je near .Keydown
 	cmp eax,WM_MOUSEMOVE 
-	je near .Redraw
+	je near .MMove
 	cmp eax,WM_CREATE		; CREATE = bylo vytvoreno naše okno
 	je near .Create
 	cmp eax,WM_SIZE			; SIZE = velikost okna byla zmenena
 	je near .Resize
 	cmp eax,WM_LBUTTONDOWN 
 	je near .LClick
+	cmp eax,WM_RBUTTONDOWN 
+	je near .RClick
 
 	invoke DefWindowProc,[hWnd],[wMsg],[wParam],[lParam] ; default - všechny ostatní spadnou sem
 	return eax
@@ -715,6 +721,16 @@ begin
 	invoke PostQuitMessage,0		; pošleme príkaz k ukoncení aplikace
 	return 0
 
+.MMove:
+	test [wParam], dword MK_LBUTTON
+	jnz .LClick
+
+	test [wParam], dword MK_RBUTTON
+	jnz .RClick
+
+
+	jmp near .Redraw
+
 .LClick:
 
 	; y
@@ -726,7 +742,21 @@ begin
 	and eax, 0x0000FFFF;
 	push eax
 
-	call near Click
+	call near Click, 1
+	jmp near .Finish
+
+.RClick:
+
+	; y
+	mov eax, dword [lParam]
+	shr eax, 16
+	push eax
+	; x
+	mov eax, dword [lParam] 
+	and eax, 0x0000FFFF;
+	push eax
+
+	call near Click, 0
 	jmp near .Finish
 
 .Keydown:
@@ -1159,6 +1189,28 @@ begin
 	return
 end
 
+;******************
+; naství buňku v mapě na daných souřadnicích na 0
+function ClrCell,scx,scy
+begin
+	
+	;eax = map + y*map_w + x
+
+	mov eax, [map_w]
+	mul dword [scy]
+	add eax, [scx]
+	add eax, [map]
+
+	cmp [eax], byte 0 ; pokud už je nastaveno nic nedělat
+	je .skip
+	mov [eax], byte 0;
+	sub [population], dword 1 
+
+	.skip:
+
+	return
+end
+
 
 ;*************************************************************
 ; nastaví bity (vytvoří prvotní buňky) v mapě
@@ -1290,7 +1342,7 @@ begin
 	sahf              ;transfer the condition codes to the CPU's flag register
 	;jpe .Finish ;the comparison was indeterminate
 
-ja .else
+ja .else ; do šířky
 
 	;fld1
 	;fchs
@@ -1305,8 +1357,9 @@ ja .else
 	fdiv st0,st1 ; st0 = 1.0 / aspect
 	fstp qword [w_right]
 
+
 jmp .fi
-.else:
+.else: ; do výšky
 
 	;fld1
 	;fchs
@@ -1334,8 +1387,8 @@ jmp .fi
 
 	push64 _f64__1 ;pro 2D vždy -1
 	push64 _f64_1  ;pro 2D vždy 1
-	push64 w_top  ; ^ +1.0
 	push64 w_bottom ; ˘ -1.0
+	push64 w_top  ; ^ +1.0
 	push64 w_right  ;    |-->  +1.0
 	push64 w_left ; <--|     -1.0
 
@@ -1343,14 +1396,18 @@ jmp .fi
 
 	push64 _f64__1 ;pro 2D vždy -1
 	push64 _f64_1  ;pro 2D vždy 1
-	push64 _f64__1 ; ˘ -1.0
 	push64 _f64_1  ; ^ +1.0
+	push64 _f64__1 ; ˘ -1.0
 	push64 _f64_1  ;    |-->  +1.0
 	push64 _f64__1 ; <--|     -1.0
 
 	%endif
 
 	invoke glOrtho; 
+
+	; st0 = 
+	;(W-(W:1,5)):2
+
 
 
 	return
@@ -1859,8 +1916,8 @@ begin
 	push edx
 
 	invoke swprintf, statsText, SIZEOF_statsText, swzStatForm,\
-		[ruleIndex], [generation], [population], [dwWndWidth], [dwWndHeight], [map_w], [map_h], [mouse_x], [mouse_y], [debug]
-	add esp, 4*(3+10) ; návrat z cdecl fce
+		[ruleIndex], [generation], [population], [dwWndWidth], [dwWndHeight], [map_w], [map_h], [mouse_x], [mouse_y];, [debug]
+	add esp, 4*(3+9) ; návrat z cdecl fce
 
 	pop edx
 	pop ecx
@@ -1870,18 +1927,49 @@ end
 
 ;***********
 ; zpracuje kliknutí na souřadnicích x_c y_c
-function Click, x_c, y_c
+; zavolá SetCell nebo ClrCell podle příznaku s_c
+function Click,  s_c, x_c, y_c
 begin
 	mov eax, [x_c]
-	mov [mouse_x], eax
-	mov eax, [y_c]
-	mov [mouse_y], eax
-
-	; spočítat souřadnice buňky
-
+	sub eax, [crop_left]
+	jb .noop ; mimo klikatelnou oblasti
+	cmp eax, [dwWndWidth]
+	ja .noop ; mimo klikatelnou oblasti
 	
 
-	;call SetCell,[],[]
+	; převod souřadnic
+	mul dword [map_w];
+	div dword [dwWndWidth];
+	mov [mouse_x], eax
+	mov [x_c], eax
+
+
+
+	mov eax, [y_c]
+	sub eax, [crop_top]
+	jb .noop
+	cmp eax, [dwWndHeight]
+	ja .noop
+
+
+	; převod souřadnic
+	mul dword [map_h]
+	div dword [dwWndHeight]
+	mov [mouse_y], eax
+	mov [y_c], eax
+
+	cmp [s_c], dword 1
+	je .set
+
+	call ClrCell,[x_c],[y_c]
+	jmp .Finish
+
+	.set:
+	call SetCell,[x_c],[y_c]
+
+	.Finish:
+	call DrawMap
+	.noop:
 
 return
 end
